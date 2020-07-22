@@ -82,13 +82,13 @@ If the `--parallel/-p` parameter is used in genome or mixed mode, the calculatio
 
 ## Kc-Align In Action
 
-To demonstrate the utility of Kc-Align we analyzed 4,224 SARS-CoV2 genome assemblies available at NCBI at the time of writing. For this analysis we used Kc-align genome mode to generate codon-aware alignment for each of the SARS-CoV2 open reading frames (ORFs). We then analyzed codon alignments of each ORF using HyPhy, a software package for detection of selection and recombination. In particular we used the FEL (Fixed Effects Likelihood), MEME (Mixed Effects Model of Evolution), and FUBAR (Fast, Unconstrained Bayesian AppRoximation) methods. FEL uses a maximum-likelihood (ML) approach to infer nonsynoymous (dN) and synonymous (dS) substitution rates on a per-site basis for a given coding alignment and corresponding phylogeny. MEME employs a mixed-effects ML approach to test the hypothesis that individual sites have been subject to episodic positive or diversifying selection. FUBAR uses a Bayesian approach to infer dN and dS substitution rates on a per-site basis for a given coding alignment and corresponding phylogeny. The HyPhy tools identified 40 potential sites under positive selection. Three of these sites have been identified by all methods. Two have also been identified in more comprehensive analysis (see https://covid19.datamonkey.org). A UCSC genome browser visualization of the results can be found at http://genome.ucsc.edu/cgi-bin/hgTracks?db=wuhCor1&lastVirtModeType=default&lastVirtModeExtraState=&virtModeType=default&virtMode=0&nonVirtPosition=&position=NC_045512v2%3A1%2D29903&hgsid=863069951_GPeqUMFmcBlaA4afiGWTI9K936Wv
+To demonstrate the utility of Kc-Align we analyzed 4,224 SARS-CoV2 genome assemblies available at NCBI at the time of writing. For this analysis we used Kc-align genome mode to generate codon-aware alignment for each of the SARS-CoV2 open reading frames (ORFs). We then analyzed codon alignments of each ORF using HyPhy, a software package for detection of selection and recombination. In particular we used the FEL (Fixed Effects Likelihood), MEME (Mixed Effects Model of Evolution), and FUBAR (Fast, Unconstrained Bayesian AppRoximation) methods. FEL uses a maximum-likelihood (ML) approach to infer nonsynoymous (dN) and synonymous (dS) substitution rates on a per-site basis for a given coding alignment and corresponding phylogeny. MEME employs a mixed-effects ML approach to test the hypothesis that individual sites have been subject to episodic positive or diversifying selection. FUBAR uses a Bayesian approach to infer dN and dS substitution rates on a per-site basis for a given coding alignment and corresponding phylogeny. The HyPhy tools identified 40 potential sites under positive selection. Three of these sites have been identified by all methods (these sites are marked with a star in the below table). Two have also been identified in more comprehensive analysis (see https://covid19.datamonkey.org). A UCSC genome browser visualization of the results can be found at http://genome.ucsc.edu/cgi-bin/hgTracks?db=wuhCor1&lastVirtModeType=default&lastVirtModeExtraState=&virtModeType=default&virtMode=0&nonVirtPosition=&position=NC_045512v2%3A1%2D29903&hgsid=863069951_GPeqUMFmcBlaA4afiGWTI9K936Wv
 
 
 | Gene/ORF  | Codon Coordinates | FEL | MEME | FUBAR | Known Site | Nextstrain Variant |
 | ------------- | ------------- | ------------- | ------------- | ------------- | ------------- | ------------- |
 | ORF1ab (leader)  | 626-628  |   |   | X  |   |   |
-| ORF1ab (nsp2)  | 1058-1060*  | X  | X  | X  | X  | X  |
+| ORF1ab (nsp2)*  | 1058-1060  | X  | X  | X  | X  | X  |
 | ORF1ab (nsp2)  | 1514-1516  |   |   | X  |   | X  |
 | ORF1ab (nsp3)  | 2945-2947  | X  |   |   |   |   |
 | ORF1ab (nsp3)  | 3371-3373  | X  |   |   |   | X  |
@@ -104,7 +104,7 @@ To demonstrate the utility of Kc-Align we analyzed 4,224 SARS-CoV2 genome assemb
 | ORF1ab (RdRp/nsp11)  | 13451-13453  |   | X  |   |   |   |
 | ORF1ab (RdRp/nsp11)  | 13457-13459  | X  | X  |   | X  | X  |
 | ORF1ab (RdRp/nsp11)  | 13463-13465  | X  | X  |   | X  |   |
-| ORF1ab (RdRp)  | 14407-14409*  | X  | X  | X  | X  | X  |
+| ORF1ab (RdRp)*  | 14407-14409  | X  | X  | X  | X  | X  |
 | ORF1ab (RdRp)  | 14425-14427  | X  |   |   |   | X  |
 | ORF1ab (RdRp)  | 15922-15924  | X  | X  |   |   |   |
 | ORF1ab (helicase)  | 17410-17412  | X  | X  |   |   | X  |
@@ -120,7 +120,7 @@ To demonstrate the utility of Kc-Align we analyzed 4,224 SARS-CoV2 genome assemb
 | ORF8  | 28086-28088  | X  | X  |   |   |   |
 | ORF8  | 28092-28094  | X  | X  |   |   |   |
 | ORF8  | 28143-28145  | X  | X  |   |   |   |
-| N  | 28310-28312*  | X  | X  | X  |   | X  |
+| N*  | 28310-28312  | X  | X  | X  |   | X  |
 | N  | 28826-28828  | X  |   | X  |   |   |
 | N  | 28850-28852  | X  |   |   |   |   |
 | N  | 28886-28888  | X  |   | X  | X  |   |
