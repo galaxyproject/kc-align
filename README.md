@@ -82,12 +82,60 @@ If the `--parallel/-p` parameter is used in genome or mixed mode, the calculatio
 
 ## Kc-Align In Action
 
-TODO
+To demonstrate the utility of Kc-Align we analyzed 4,224 SARS-CoV2 genome assemblies available at NCBI at the time of writing. For this analysis we used Kc-align genome mode to generate codon-aware alignment for each of the SARS-CoV2 open reading frames (ORFs). We then analyzed codon alignments of each ORF using HyPhy, a software package for detection of selection and recombination. In particular we used the FEL (Fixed Effects Likelihood), MEME (Mixed Effects Model of Evolution), and FUBAR (Fast, Unconstrained Bayesian AppRoximation) methods. FEL uses a maximum-likelihood (ML) approach to infer nonsynoymous (dN) and synonymous (dS) substitution rates on a per-site basis for a given coding alignment and corresponding phylogeny. MEME employs a mixed-effects ML approach to test the hypothesis that individual sites have been subject to episodic positive or diversifying selection. FUBAR uses a Bayesian approach to infer dN and dS substitution rates on a per-site basis for a given coding alignment and corresponding phylogeny. The HyPhy tools identified 40 potential sites under positive selection. Three of these sites have been identified by all methods. Two have also been identified in more comprehensive analysis (see https://covid19.datamonkey.org). A UCSC genome browser visualization of the results can be found at http://genome.ucsc.edu/cgi-bin/hgTracks?db=wuhCor1&lastVirtModeType=default&lastVirtModeExtraState=&virtModeType=default&virtMode=0&nonVirtPosition=&position=NC_045512v2%3A1%2D29903&hgsid=863069951_GPeqUMFmcBlaA4afiGWTI9K936Wv
 
-Will post results from SARS-CoV-2 analysis
+
+| Gene/ORF  | Codon Coordinates | FEL | MEME | FUBAR | Known Site | Nextstrain Variant |
+| ------------- | ------------- | ------------- | ------------- | ------------- | ------------- | ------------- |
+| ORF1ab (leader)  | 626-628  |   |   | X  |   |   |
+| ORF1ab (nsp2)  | 1058-1060*  | X  | X  | X  | X  | X  |
+| ORF1ab (nsp2)  | 1514-1516  |   |   | X  |   | X  |
+| ORF1ab (nsp3)  | 2945-2947  | X  |   |   |   |   |
+| ORF1ab (nsp3)  | 3371-3373  | X  |   |   |   | X  |
+| ORF1ab (nsp3)  | 6725-6727  | X  |   |   |   |   |
+| ORF1ab (nsp4)  | 8885-8887  |   |   | X  |   |   |
+| ORF1ab (3CL)  | 10097-10099  | X  |   |   |   | X  |
+| ORF1ab (3CL)  | 10187-10189  | X  | X  |   |   |   |
+| ORF1ab (3CL)  | 10265-10267  | X  |   |   |   | X  |
+| ORF1ab (3CL)  | 10277-10279  | X  | X  |   |   |   |
+| ORF1ab (nsp6)  | 11381-11383  | X  | X  |   |   |   |
+| ORF1ab (nsp6)  | 11837-11839  | X  |   |   |   | X  |
+| ORF1ab (RdRp/nsp11)  | 13445-13447  |   | X  |   |   |   |
+| ORF1ab (RdRp/nsp11)  | 13451-13453  |   | X  |   |   |   |
+| ORF1ab (RdRp/nsp11)  | 13457-13459  | X  | X  |   | X  | X  |
+| ORF1ab (RdRp/nsp11)  | 13463-13465  | X  | X  |   | X  |   |
+| ORF1ab (RdRp)  | 14407-14409*  | X  | X  | X  | X  | X  |
+| ORF1ab (RdRp)  | 14425-14427  | X  |   |   |   | X  |
+| ORF1ab (RdRp)  | 15922-15924  | X  | X  |   |   |   |
+| ORF1ab (helicase)  | 17410-17412  | X  | X  |   |   | X  |
+| ORF1ab (methyltransferase)  | 21145-21148  | X  |   |   |   |   |
+| ORF1ab (methyltransferase)  | 21151-21153  | X  |   |   |   |   |
+| Spike  | 21575-21577  | X  |   |   |   |   |
+| Spike  | 21722-21724  | X  |   | X  |   |   |
+| Spike  | 23402-23404  | X  |   | X  | X  | X  |
+| ORF3a  | 25561-25563  |   |   | X  | X  | X  |
+| ORF7b  | 27876-27878  | X  | X  |   |   |   |
+| ORF8  | 27963-27965  | X  | X  |   |   | X  |
+| ORF8  | 28077-28079  | X  | X  |   |   |   |
+| ORF8  | 28086-28088  | X  | X  |   |   |   |
+| ORF8  | 28092-28094  | X  | X  |   |   |   |
+| ORF8  | 28143-28145  | X  | X  |   |   |   |
+| N  | 28310-28312*  | X  | X  | X  |   | X  |
+| N  | 28826-28828  | X  |   | X  |   |   |
+| N  | 28850-28852  | X  |   |   |   |   |
+| N  | 28886-28888  | X  |   | X  | X  |   |
+| N  | 28985-28987  |   |   | X  |   | X  |
+| N  | 29291-29293  | X  |   |   |   | X  |
+| N  | 29450-29452  | X  |   |   |   | X  |
 
 ## Speed
 
-TODO
+The speed of Kc-Align is largely dependent on the analysis mode. In gene mode, it is comparable to Kalign3 on its own as there is little additional calculation needed to make the alignment codon aware. The genome and mixed modes, however, are several times slower than gene mode in order to facilitate the homology search, but an option to enable parallelization increases this speed by ~35%. This is accomplished by testing the three reading frames of each input sequence in parallel. We tested the speed of Kc-Align in Gene and Genome mode, as well as Genome mode with parallelization enabled, by aligning five SARS-CoV-2 CDSs of varying lengths using 1,000 total genomes. 
 
-Speed test results
+| Gene  | Length (nucleotides) | Gene Mode Run Time | Genome Mode (1 core) Run Time | Genome Parallel Run Time |
+| ------------- | ------------- | ------------- | ------------- | ------------- |
+| ORF3a  | 827  | 00:00:28  | 00:08:23  | 00:05:19  |
+| N  | 1259  | 00:00:28  | 00:12:54  | 00:08:14  |
+| Spike  | 3821  | 00:00:50  | 01:20:51  | 00:52:47  |
+| ORF1b  | 8084  | 00:01:54  | 5:04:43  | 03:20:00  |
+| ORF1a  | 13202  | 00:04:31  | 13:55:10  | 9:09:25  |
