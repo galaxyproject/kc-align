@@ -12,7 +12,7 @@ setuptools.setup(
     install_requires=['biopython'],
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/davebx/kc-align",
+    url="https://github.com/galaxyproject/kc-align",
     packages=['kcalign'],
     entry_points={'console_scripts': ['kc-align=kcalign.cli:main']},
     classifiers=[
