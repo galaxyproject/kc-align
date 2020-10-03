@@ -12,6 +12,7 @@ import warnings
 warnings.filterwarnings('ignore')
 import concurrent.futures  # noqa: E402
 
+# NOTE: reads = sequences to be aligned
 
 def trim(align, trans):
     """
@@ -67,8 +68,8 @@ def invoke_kalign(input_file, output_file):
             mafft = subprocess.Popen(command, stdout=out_fh)
             mafft.wait()
             _, stderr = mafft.communicate()
-        if mafft.returncode != 0:
-            sys.stderr.write('Error running mafft')
+        if mafft.returncode != 0 and input_file == 'pre_align.fasta':
+            sys.stderr.write('Error running kalign and mafft on final alignment')
             sys.stderr.write(stderr.decode('utf-8'))
             return 1
         else:
@@ -150,7 +151,7 @@ def distance(s1, s2):
     return distances[-1]
 
 
-def para_find_homologs(seq1, seq2, tab):
+def para_find_homologs(seq1, seq2, tab, dist):
     """
     Given a protein sequence and genome sequence finds the protein
     sequence of the homologous protein in the genome (currently checks
@@ -179,6 +180,7 @@ def para_find_homologs(seq1, seq2, tab):
                 distances.append(res.result()[1])
                 frames2.append(res.result()[2])
     subprocess.call('rm tmpfilexyz*.fasta outfilexyz*.fasta', shell=True)
+    # Frameshift test
     del frames[distances.index(min(distances))]
     for i in frames:
         if min(distances) == 0:
@@ -186,11 +188,15 @@ def para_find_homologs(seq1, seq2, tab):
         if (distances[i]/min(distances) < 1.1 and
            distances[i]/min(distances) > 0.9):
             return 1
-    return (trans[distances.index(min(distances))],
-            frames2[distances.index(min(distances))])
+    cutoffs = {'very-close': 0.075, 'close': 0.15, 'semi-close': 0.225, 'less-close': 0.3, 'none': 1000}
+    if min(distances)/len(trans[distances.index(min(distances))]) > cutoffs[dist]:
+        return 1
+    else:
+        return (trans[distances.index(min(distances))],
+                frames2[distances.index(min(distances))])
 
 
-def para_join_find_homologs(seqs, seq2, tab):
+def para_join_find_homologs(seqs, seq2, tab, dist):
     """
     Same as find_homologs() but for when the gene of interest is split
     between two different reading frames.
@@ -218,8 +224,12 @@ def para_join_find_homologs(seqs, seq2, tab):
             if (distances[i]/min(distances) < 1.1 and
                distances[i]/min(distances) > 0.9):
                 return 1
-        final.append((trans[distances.index(min(distances))],
-                      frames2[distances.index(min(distances))]))
+        cutoffs = {'very-close': 0.075, 'close': 0.15, 'semi-close': 0.225, 'less-close': 0.3, 'none': 1000}
+        if min(distances)/len(trans[distances.index(min(distances))]) > cutoffs[dist]:
+            return 1
+        else:
+            final.append((trans[distances.index(min(distances))],
+                          frames2[distances.index(min(distances))]))
     return final
 
 
@@ -245,7 +255,7 @@ def test_frames(seq1, seq2, frame, tab):
 
 
 # Original non parallel versions
-def find_homologs(seq1, seq2, tab):
+def find_homologs(seq1, seq2, tab, dist):
     trans = []
     distances = []
     for i in range(0, 3):
@@ -271,11 +281,17 @@ def find_homologs(seq1, seq2, tab):
         if (distances[i]/min(distances) < 1.1 and
            distances[i]/min(distances) > 0.9):
             return 1
-    return (trans[distances.index(min(distances))],
-            distances.index(min(distances)))
+    # Return 1 for seqs whose distance from ref (normalized by length) is above the specified
+    # cutoff (cutoffs determined empirically)
+    cutoffs = {'very-close': 0.075, 'close': 0.15, 'semi-close': 0.225, 'less-close': 0.3, 'none': 1000}
+    if min(distances)/len(trans[distances.index(min(distances))]) > cutoffs[dist]:
+        return 1
+    else:
+        return (trans[distances.index(min(distances))],
+                distances.index(min(distances)))
 
 
-def join_find_homologs(seqs, seq2, tab):
+def join_find_homologs(seqs, seq2, tab, dist):
     final = []
     for seq in seqs:
         trans = []
@@ -304,8 +320,14 @@ def join_find_homologs(seqs, seq2, tab):
             if (distances[i]/min(distances) < 1.1 and
                distances[i]/min(distances) > 0.9):
                 return 1
-        final.append((trans[distances.index(min(distances))],
-                      distances.index(min(distances))))
+        # Return 1 for seqs whose distance from ref (normalized by length) is above the specified
+        # cutoff (cutoffs determined empirically)
+        cutoffs = {'very-close': 0.075, 'close': 0.15, 'semi-close': 0.225, 'less-close': 0.3, 'none': 1000}
+        if min(distances)/len(trans[distances.index(min(distances))]) > cutoffs[dist]:
+            return 1
+        else:
+            final.append((trans[distances.index(min(distances))],
+                          distances.index(min(distances))))
     return final
 
 
@@ -379,7 +401,7 @@ def check_n(seq):
         return 1
 
 
-def create_lists(reads, seq, og_seqs, join, para, tab):
+def create_lists(reads, seq, og_seqs, join, para, tab, dist):
     """
     Use pairwise alignment with Kalign to determine the frame that the
     homolog for the gene of interest is located. Will also look for any
@@ -392,17 +414,24 @@ def create_lists(reads, seq, og_seqs, join, para, tab):
     err = []
     if join == 0 and seq[-1] == '*':
         seq = seq[:-1]
+    records = []
+    # If reference seq in reads, remove it
     for record in SeqIO.parse(reads, 'fasta'):
+        if record.id in og_seqs.keys():
+            pass
+        else:
+            records.append(record)
+    for record in records:
         if para:
             if join == 0:
-                result = para_find_homologs(seq, record.seq, tab)
+                result = para_find_homologs(seq, record.seq, tab, dist)
             elif join == 1:
-                result = para_join_find_homologs(seq, record.seq, tab)
+                result = para_join_find_homologs(seq, record.seq, tab, dist)
         else:
             if join == 0:
-                result = find_homologs(seq, record.seq, tab)
+                result = find_homologs(seq, record.seq, tab, dist)
             elif join == 1:
-                result = join_find_homologs(seq, record.seq, tab)
+                result = join_find_homologs(seq, record.seq, tab, dist)
         if result == 1:
             err.append(record.id)
         else:
@@ -438,7 +467,7 @@ def create_lists(reads, seq, og_seqs, join, para, tab):
     return seqs, names, ids, og_seqs, err
 
 
-def combine_align(records, ids, names, seqs, mode):
+def combine_align(records, ids, names, seqs, keep):
     """
     Create multiFASTA file with protein sequences of the gene of interest
     and the in-frame sequences of the genomes to be multiple aligned and
@@ -451,7 +480,7 @@ def combine_align(records, ids, names, seqs, mode):
     if kresult == 2:
         print('Alternative aligner MAFFT used because primary aligner '
               'Kalign failed')
-    if mode == 'gene':
+    if not keep:
         subprocess.call(['rm', 'pre_align.fasta'])
 
 
@@ -567,7 +596,7 @@ def check_tab(tab):
     return tab
 
 
-def genome_mode(reference, reads, start, end, compress, para, tab):
+def genome_mode(reference, reads, start, end, compress, para, tab, keep, dist):
     """For when inputs are whole genomes"""
     check_input(reference, reads)
     tab = check_tab(tab)
@@ -608,7 +637,7 @@ def genome_mode(reference, reads, start, end, compress, para, tab):
         else:
             seq = record.seq[start % 3:].translate(table=tab)[start//3:end//3]
             og_seqs[record.id] = record.seq[start:end]
-    seqs, names, ids, og_seqs, err = create_lists(reads, seq, og_seqs, join, para, tab)
+    seqs, names, ids, og_seqs, err = create_lists(reads, seq, og_seqs, join, para, tab, dist)
     if compress:
         seqs, names, ids, og_seqs = compressor(seqs, names, ids, og_seqs)
     if join == 1:
@@ -621,7 +650,7 @@ def genome_mode(reference, reads, start, end, compress, para, tab):
     if len(seqs) == 0:
         print('No homologous sequences were found')
         return 1
-    combine_align(records, ids, names, seqs, 'genome')
+    combine_align(records, ids, names, seqs, keep)
     names = dict(zip(ids, names))
     names[idd] = name
     restore_codons(og_seqs, names)
@@ -635,7 +664,7 @@ def genome_mode(reference, reads, start, end, compress, para, tab):
     return 0
 
 
-def gene_mode(reference, reads, compress, tab):
+def gene_mode(reference, reads, compress, tab, keep):
     """For when inputs are in-frame genes"""
     check_input(reference, reads)
     tab = check_tab(tab)
@@ -661,7 +690,7 @@ def gene_mode(reference, reads, compress, tab):
     if compress:
         seqs, names, ids, og_seqs = compressor(seqs[1:], names[1:], ids[1:],
                                                og_seqs)
-    combine_align(records, ids, names, seqs, 'gene')
+    combine_align(records, ids, names, seqs, keep)
     new_names = dict(zip(ids, names))
     new_names[records[0].id] = records[0].description
     restore_codons(og_seqs, new_names)
@@ -675,7 +704,7 @@ def gene_mode(reference, reads, compress, tab):
     return 0
 
 
-def mixed_mode(reference, reads, compress, para, tab):
+def mixed_mode(reference, reads, compress, para, tab, keep, dist):
     """For when reference input is an in-frame gene but the reads are whole genomes"""
     check_input(reference, reads)
     tab = check_tab(tab)
@@ -686,7 +715,7 @@ def mixed_mode(reference, reads, compress, para, tab):
         name = record.description
         seq = record.seq.translate(table=tab)
         og_seqs[record.id] = record.seq
-    seqs, names, ids, og_seqs, err = create_lists(reads, seq, og_seqs, join, para, tab)
+    seqs, names, ids, og_seqs, err = create_lists(reads, seq, og_seqs, join, para, tab, dist)
     if compress:
         seqs, names, ids, og_seqs = compressor(seqs, names, ids, og_seqs)
     if join == 1:
@@ -698,7 +727,7 @@ def mixed_mode(reference, reads, compress, para, tab):
     if len(seqs) == 0:
         print('No homologous sequences were found')
         return 1
-    combine_align(records, ids, names, seqs, 'mixed')
+    combine_align(records, ids, names, seqs, keep)
     names = dict(zip(ids, names))
     names[idd] = name
     restore_codons(og_seqs, names)

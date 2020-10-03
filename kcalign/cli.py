@@ -4,7 +4,7 @@ from kcalign import genome_mode, gene_mode, mixed_mode
 
 
 def main():
-    long_description = 'Performs a codon-aware (aka translation) multiple sequence alignment. Can be run in 3 different modes depending on the input. See the documentation for more information: https://github.com/davebx/kc-align/edit/master/README.md'
+    long_description = 'Performs a codon-aware (aka translation) multiple sequence alignment. Can be run in 3 different modes depending on the input. See the documentation for more information: https://github.com/galaxyproject/kc-align'
     parser = argparse.ArgumentParser(description='Align a sequence against multiple others in a codon-aware fashion.', epilog=long_description)
     parser.add_argument('--reference', '-r', dest='reference', action='store', required=True, help='Reference sequence')
     parser.add_argument('--sequences', '-S', dest='seqs', action='store', required=True, help='Other sequences to align')
@@ -14,14 +14,17 @@ def main():
     parser.add_argument('--compress', '-c', dest='compress', action='store_true', help='Compress identical sequences')
     parser.add_argument('--parallel', '-p', dest='para', action='store_true', help='Enable parallelization of homology search')
     parser.add_argument('--table', '-t', dest='table', action='store', help='Choose alternative translation table (See https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi for values)')
+    parser.add_argument('--keep', '-k', dest='keep', action='store_true', help='Keep translated pre-alignment sequences file named pre_align.fasta, otherwise will delete')
+    parser.add_argument('--dist', '-d', dest='distance', action='store', choices=['very-close', 'close', 'semi-close', 'less-close', 'none'], default='none', help='For genome/mixed mode, determines the max distance a homologous sequence can be before it is discarded from the alignment (default = none)')
+
     args = parser.parse_args()
 
     if args.mode == 'genome':
-        return genome_mode(args.reference, args.seqs, args.start, args.end, args.compress, args.para, args.table)
+        return genome_mode(args.reference, args.seqs, args.start, args.end, args.compress, args.para, args.table, args.keep, args.distance)
     elif args.mode == 'gene':
-        return gene_mode(args.reference, args.seqs, args.compress, args.table)
+        return gene_mode(args.reference, args.seqs, args.compress, args.table, args.keep)
     else:
-        return mixed_mode(args.reference, args.seqs, args.compress, args.para, args.table)
+        return mixed_mode(args.reference, args.seqs, args.compress, args.para, args.table, args.keep, args.distance)
 
 if __name__ == '__main__':
     exit(main())
