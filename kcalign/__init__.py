@@ -11,6 +11,8 @@ import subprocess
 import warnings
 warnings.filterwarnings('ignore')
 import concurrent.futures  # noqa: E402
+import random
+
 
 # NOTE: reads = sequences to be aligned
 
@@ -119,7 +121,7 @@ def join_extract_DNA_seq(seq, homologs, tab):
     between two different reading frames.
     """
     Dseqs = []
-    for homolog in homologs:
+    for homolog in homologs[0]:
         shift = homolog[1]
         Pseq = seq[homolog[1]:].translate(table=tab)
         check = 0
@@ -151,7 +153,7 @@ def distance(s1, s2):
     return distances[-1]
 
 
-def para_find_homologs(seq1, seq2, tab, dist):
+def para_find_homologs(seq1, seq2, idd, tab, dist):
     """
     Given a protein sequence and genome sequence finds the protein
     sequence of the homologous protein in the genome (currently checks
@@ -169,9 +171,10 @@ def para_find_homologs(seq1, seq2, tab, dist):
     trans = []
     distances = []
     frames2 = []
+    rand = str(random.randint(1000000, 9999999))
     with concurrent.futures.ProcessPoolExecutor() as executor:
         frames = [0, 1, 2]
-        results = [executor.submit(test_frames, seq1, seq2, f, tab) for f in frames]
+        results = [executor.submit(test_frames, seq1, seq2, f, tab, rand) for f in frames]
         for res in concurrent.futures.as_completed(results):
             if res.result() == 1:
                 return 1
@@ -179,7 +182,7 @@ def para_find_homologs(seq1, seq2, tab, dist):
                 trans.append(res.result()[0])
                 distances.append(res.result()[1])
                 frames2.append(res.result()[2])
-    subprocess.call('rm tmpfilexyz*.fasta outfilexyz*.fasta', shell=True)
+    subprocess.call('rm tmp'+rand+'file*.fasta out'+rand+'file*.fasta', shell=True)
     # Frameshift test
     del frames[distances.index(min(distances))]
     for i in frames:
@@ -193,22 +196,23 @@ def para_find_homologs(seq1, seq2, tab, dist):
         return 1
     else:
         return (trans[distances.index(min(distances))],
-                frames2[distances.index(min(distances))])
+                frames2[distances.index(min(distances))], idd)
 
 
-def para_join_find_homologs(seqs, seq2, tab, dist):
+def para_join_find_homologs(seqs, seq2, idd, tab, dist):
     """
     Same as find_homologs() but for when the gene of interest is split
     between two different reading frames.
     """
     final = []
+    rand = str(random.randint(1000000, 9999999))
     for seq in seqs:
         trans = []
         distances = []
         frames2 = []
         with concurrent.futures.ProcessPoolExecutor() as executor:
             frames = [0, 1, 2]
-            results = [executor.submit(test_frames, seq, seq2, f, tab) for f in frames]
+            results = [executor.submit(test_frames, seq, seq2, f, tab, rand) for f in frames]
             for res in concurrent.futures.as_completed(results):
                 if res.result() == 1:
                     return 1
@@ -216,7 +220,7 @@ def para_join_find_homologs(seqs, seq2, tab, dist):
                     trans.append(res.result()[0])
                     distances.append(res.result()[1])
                     frames2.append(res.result()[2])
-        subprocess.call('rm tmpfilexyz*.fasta outfilexyz*.fasta', shell=True)
+        subprocess.call('rm tmp'+rand+'file*.fasta out'+rand+'file*.fasta', shell=True)
         del frames[distances.index(min(distances))]
         for i in frames:
             if min(distances) == 0:
@@ -230,10 +234,10 @@ def para_join_find_homologs(seqs, seq2, tab, dist):
         else:
             final.append((trans[distances.index(min(distances))],
                           frames2[distances.index(min(distances))]))
-    return final
+    return (final, idd)
 
 
-def test_frames(seq1, seq2, frame, tab):
+def test_frames(seq1, seq2, frame, tab, rand):
     """
     Function that finds the correct reading frame for homolog. Originally
     a part of find_homologs but was split to enable parallelization.
@@ -241,12 +245,12 @@ def test_frames(seq1, seq2, frame, tab):
     trans0 = seq2[frame:].translate(stop_symbol='', table=tab)
     stops = seq2[frame:].translate(table=tab)
     to_align = [SeqRecord(seq1, id='Seq1'), SeqRecord(trans0, id='Seq2')]
-    SeqIO.write(to_align, 'tmpfilexyz'+str(frame)+'.fasta', 'fasta')
-    kresult = invoke_kalign('tmpfilexyz'+str(frame)+'.fasta', 'outfilexyz'+str(frame)+'.fasta')
+    SeqIO.write(to_align, 'tmp'+rand+'file'+str(frame)+'.fasta', 'fasta')
+    kresult = invoke_kalign('tmp'+rand+'file'+str(frame)+'.fasta', 'out'+rand+'file'+str(frame)+'.fasta')
     if kresult == 1:
         return 1
     alignments = []
-    for record in SeqIO.parse('outfilexyz'+str(frame)+'.fasta', 'fasta'):
+    for record in SeqIO.parse('out'+rand+'file'+str(frame)+'.fasta', 'fasta'):
         alignments.append(record.seq)
     alignments[0] = reinsert_star(seq1, alignments[0])
     trans = Seq(trim(alignments, stops))
@@ -401,7 +405,7 @@ def check_n(seq):
         return 1
 
 
-def create_lists(reads, seq, og_seqs, join, para, tab, dist):
+def create_lists(reads, seq, og_seqs, join, tab, dist, cores):
     """
     Use pairwise alignment with Kalign to determine the frame that the
     homolog for the gene of interest is located. Will also look for any
@@ -414,42 +418,58 @@ def create_lists(reads, seq, og_seqs, join, para, tab, dist):
     err = []
     if join == 0 and seq[-1] == '*':
         seq = seq[:-1]
+    # If reference seq in reads, remove it. Also creates dict of ids: descriptions and ids: seqs
     records = []
-    # If reference seq in reads, remove it
+    descrip_dict = {}
+    seq_dict = {}
     for record in SeqIO.parse(reads, 'fasta'):
         if record.id in og_seqs.keys():
             pass
         else:
             records.append(record)
-    for record in records:
-        if para:
+            descrip_dict[record.id] = ' '.join(record.description.split()[1:])
+            seq_dict[record.id] = record.seq
+
+    grouped_records = []
+    sub_records = []
+    # If multithreading enabled, split records into groups of size [number of cores]/3
+    if int(cores) > 1:
+        for i,record in enumerate(records):
+            if len(sub_records) < int(cores)/3:
+                sub_records.append(record)
+                if len(sub_records) == int(cores)/3 or i == len(records)-1:
+                    grouped_records.append(sub_records)
+                    sub_records = []
+
+        # Run para_find_homologs (or join version) for each record in each group simultaneously
+        outputs = []
+        for group in grouped_records:
+            with concurrent.futures.ProcessPoolExecutor() as executor:
+                if join == 0:
+                    results = [executor.submit(para_find_homologs, seq, g.seq, g.id, tab, dist) for g in group]
+                elif join == 1:
+                    results = [executor.submit(para_join_find_homologs, seq, g.seq, g.id, tab, dist) for g in group]
+                for res in concurrent.futures.as_completed(results):
+                    outputs.append(res.result())
+
+        for out in outputs:
+            if out == 1:
+                err.append(out[-1])
+            else:
+                ids.append(out[-1])
+                names.append(descrip_dict[out[-1]])
             if join == 0:
-                result = para_find_homologs(seq, record.seq, tab, dist)
+                seqs.append(out[0])
+                og_seqs[out[-1]] = extract_DNA_seq(seq_dict[out[-1]][out[1]:], seqs[-1], tab)
             elif join == 1:
-                result = para_join_find_homologs(seq, record.seq, tab, dist)
-        else:
-            if join == 0:
-                result = find_homologs(seq, record.seq, tab, dist)
-            elif join == 1:
-                result = join_find_homologs(seq, record.seq, tab, dist)
-        if result == 1:
-            err.append(record.id)
-        else:
-            ids.append(record.id)
-            names.append(record.description)
-            if join == 0:
-                seqs.append(result[0])
-                og_seqs[record.id] = extract_DNA_seq(record.seq[result[1]:],
-                                                     seqs[-1], tab)
-            elif join == 1:
-                seqs.append(result[0][0]+result[1][0])
-                og_seqs[record.id] = join_extract_DNA_seq(record.seq, result, tab)
-            if og_seqs[record.id] == 1:
+                seqs.append(out[0][0][0]+out[0][1][0])
+                og_seqs[out[-1]] = join_extract_DNA_seq(seq_dict[out[-1]], out[:-1], tab)
+            if og_seqs[out[-1]] == 1:
                 shift = 1
             else:
-                if len(og_seqs[record.id]) > 200 and join == 0:
+                if len(og_seqs[out[-1]]) > 200 and join == 0:
                     try:
-                        shift = detect_frameshift(seq, og_seqs[record.id], tab)
+                        shift = detect_frameshift(seq, og_seqs[out[-1]], tab)
                     except Exception:
                         shift = 1
                 else:
@@ -462,8 +482,47 @@ def create_lists(reads, seq, og_seqs, join, para, tab, dist):
                 ids = ids[:-1]
                 names = names[:-1]
                 seqs = seqs[:-1]
-                del og_seqs[record.id]
+                del og_seqs[out[-1]]
+                err.append(out[-1])   
+    # Non-parallel                        
+    else:
+        for record in records:
+            if join == 0:
+                result = find_homologs(seq, record.seq, tab, dist)
+            elif join == 1:
+                result = join_find_homologs(seq, record.seq, tab, dist)
+            if result == 1:
                 err.append(record.id)
+            else:
+                ids.append(record.id)
+                names.append(record.description)
+                if join == 0:
+                    seqs.append(result[0])
+                    og_seqs[record.id] = extract_DNA_seq(record.seq[result[1]:],
+                                                         seqs[-1], tab)
+                elif join == 1:
+                    seqs.append(result[0][0]+result[1][0])
+                    og_seqs[record.id] = join_extract_DNA_seq(record.seq, result, tab)
+                if og_seqs[record.id] == 1:
+                    shift = 1
+                else:
+                    if len(og_seqs[record.id]) > 200 and join == 0:
+                        try:
+                            shift = detect_frameshift(seq, og_seqs[record.id], tab)
+                        except Exception:
+                            shift = 1
+                    else:
+                        shift = 0
+                if shift == 0:
+                    n_check = check_n(og_seqs[ids[-1]])
+                else:
+                    n_check = 0
+                if shift == 1 or n_check == 1:
+                    ids = ids[:-1]
+                    names = names[:-1]
+                    seqs = seqs[:-1]
+                    del og_seqs[record.id]
+                    err.append(record.id)
     return seqs, names, ids, og_seqs, err
 
 
@@ -596,8 +655,11 @@ def check_tab(tab):
     return tab
 
 
-def genome_mode(reference, reads, start, end, compress, para, tab, keep, dist):
+def genome_mode(reference, reads, start, end, compress, tab, keep, dist, cores):
     """For when inputs are whole genomes"""
+    if int(cores) > 1 and int(cores)%3 != 0:
+        print('Invalid number of threads selected. Choose a number divisible by 3')
+        return 1
     check_input(reference, reads)
     tab = check_tab(tab)
     # Check that start and end coordinates are present and valid
@@ -623,7 +685,6 @@ def genome_mode(reference, reads, start, end, compress, para, tab, keep, dist):
         if start[0] >= end[0] or start[1] >= end[1]:
             print('User Error: start coordinate(s) must be less than the end coordinate(s)')
             return 1
-
     # Find protein sequence of gene of interest and extract the original DNA
     # sequence (only for genome mode)
     og_seqs = {}
@@ -637,7 +698,7 @@ def genome_mode(reference, reads, start, end, compress, para, tab, keep, dist):
         else:
             seq = record.seq[start % 3:].translate(table=tab)[start//3:end//3]
             og_seqs[record.id] = record.seq[start:end]
-    seqs, names, ids, og_seqs, err = create_lists(reads, seq, og_seqs, join, para, tab, dist)
+    seqs, names, ids, og_seqs, err = create_lists(reads, seq, og_seqs, join, tab, dist, cores)
     if compress:
         seqs, names, ids, og_seqs = compressor(seqs, names, ids, og_seqs)
     if join == 1:
@@ -704,8 +765,11 @@ def gene_mode(reference, reads, compress, tab, keep):
     return 0
 
 
-def mixed_mode(reference, reads, compress, para, tab, keep, dist):
+def mixed_mode(reference, reads, compress, tab, keep, dist, cores):
     """For when reference input is an in-frame gene but the reads are whole genomes"""
+    if int(cores) > 1 and int(cores)%3 != 0:
+        print('Invalid number of threads selected. Choose a number divisible by 3')
+        return 1
     check_input(reference, reads)
     tab = check_tab(tab)
     join = 0
@@ -715,7 +779,7 @@ def mixed_mode(reference, reads, compress, para, tab, keep, dist):
         name = record.description
         seq = record.seq.translate(table=tab)
         og_seqs[record.id] = record.seq
-    seqs, names, ids, og_seqs, err = create_lists(reads, seq, og_seqs, join, para, tab, dist)
+    seqs, names, ids, og_seqs, err = create_lists(reads, seq, og_seqs, join, tab, dist, cores)
     if compress:
         seqs, names, ids, og_seqs = compressor(seqs, names, ids, og_seqs)
     if join == 1:
